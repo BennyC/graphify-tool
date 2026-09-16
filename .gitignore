@@ -1,0 +1,8 @@
+# Corpora are ignored for now. When sharing with the team, delete the next line
+# so scraped docs and prebuilt graphs travel with the repo.
+corpora/
+
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
