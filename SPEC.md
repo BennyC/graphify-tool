@@ -30,14 +30,20 @@ corpora/<slug>/
 
 ## Ingest: `/docs-ingest <slug> <url>`
 
-1. Source strategy, chosen automatically, overridable:
+1. Source strategy. The scraper tries these automatically, in order:
    1. `llms.txt` at the site root, used only as a seed list of page URLs.
       `llms-full.txt` is ignored because it loses page boundaries and
       therefore citations.
-   2. Clone the docs source repo. Claude finds the repo link on the site,
-      proposes it, user confirms. Manifest records `source_repo`,
-      `source_ref`, `docs_path`.
-   3. Crawl under a URL prefix. `sitemap.xml` preferred over link-following.
+   2. `sitemap.xml` (from robots.txt, the origin, or the prefix), filtered
+      to the URL prefix.
+   3. Crawl under the URL prefix by following links.
+   Cloning the docs source repo is a fourth strategy the skill offers
+   explicitly (`--repo`, `--docs-path`, `--ref`) rather than trying it
+   automatically, because picking the repo needs Claude and the user in the
+   loop and rendered pages proved more faithful than raw MkDocs source.
+   Manifest records `source_repo`, `source_ref`, `docs_path` when used.
+   If a site serves native markdown at `<url>.md` the scraper uses it
+   instead of converting HTML (Agent Gateway does; ArgoCD does not).
 2. Scraper writes each page as markdown with `source_url` and `title`
    frontmatter, plus `pages.json`. Main-content extraction via trafilatura,
    markdownify fallback. Polite delay, descriptive user agent.
