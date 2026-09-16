@@ -53,10 +53,12 @@ links. Use the graph query only to drill into specifics.
 
 ## 3. Read the source before answering
 
-Graph nodes carry `source_file` (relative to `raw/`) and `source_url`. For
-every claim you intend to make, open the raw page under `<raw_path>/` and
-confirm it. The graph tells you where to look; the page is the evidence.
-Never cite a URL you did not read.
+Graph nodes carry `source_file`, relative to `<raw_path>/`. Open that file:
+its frontmatter has `source_url` and `title`, and its body is the evidence.
+`corpora/<slug>/pages.json` maps every file to its URL if you need a batch
+lookup. For every claim you intend to make, confirm it in the raw page. The
+graph tells you where to look; the page is the evidence. Never cite a URL
+you did not read.
 
 ## 4. Answer
 

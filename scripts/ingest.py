@@ -15,7 +15,7 @@ Steps:
     3. extract   graphify extract raw --backend claude-cli --out .   (cwd = corpus dir)
     4. label     graphify label . --backend claude-cli --missing-only
     5. wiki      graphify export wiki
-    6. manifest  corpora/<slug>/manifest.json
+    6. manifest  corpora/<slug>/manifest.json (pages.json sits beside it)
 
 --repo <git-url> --docs-path <dir> replaces step 2 with a shallow clone: markdown
 files under <dir> are copied into raw/ and given source_url values derived from
@@ -107,7 +107,7 @@ def scrape_repo(args, out: Path) -> dict:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(f"---\nsource_url: {url}\ntitle: {json.dumps(title)}\nfetched_at: {fetched_at}\n---\n\n{text}", encoding="utf-8")
             pages.append({"file": rel.as_posix(), "url": url, "title": title, "chars": len(text)})
-        (out / "pages.json").write_text(json.dumps(pages, indent=2), encoding="utf-8")
+        (out.parent / "pages.json").write_text(json.dumps(pages, indent=2), encoding="utf-8")
         return {"strategy": "repo", "pages": len(pages), "capped": len(pages) >= args.max_pages,
                 "source_ref": ref, "fetched_at": fetched_at, "skipped": 0, "errors": 0}
 
@@ -149,10 +149,10 @@ def main() -> int:
 
     # 1 + 2: content
     if args.skip_scrape:
-        if not (raw / "pages.json").exists():
-            log("--skip-scrape given but raw/pages.json is missing")
+        if not (corpus / "pages.json").exists():
+            log("--skip-scrape given but corpora/<slug>/pages.json is missing")
             return 2
-        pages = json.loads((raw / "pages.json").read_text())
+        pages = json.loads((corpus / "pages.json").read_text())
         scrape_info = {"strategy": manifest.get("strategy", "unknown"), "pages": len(pages), "capped": False,
                        "fetched_at": manifest.get("fetched_at")}
         log(f"reusing raw/: {len(pages)} pages")
@@ -183,10 +183,20 @@ def main() -> int:
     if args.force:
         cmd.append("--force")
     log(f"extracting {scrape_info['pages']} pages with claude-cli model={args.model} parallel={args.parallel}. This bills your Claude subscription.")
-    p = run(cmd, cwd=corpus, env=env)
-    if p.returncode != 0:
-        log(f"graphify extract failed with exit {p.returncode}")
-        return p.returncode
+    tokens_in = tokens_out = None
+    log("$ " + " ".join(cmd) + f"   (cwd={corpus})")
+    proc = subprocess.Popen(cmd, cwd=corpus, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        sys.stderr.write(line)
+        sys.stderr.flush()
+        m = re.search(r"tokens:\s*([\d,]+) in / ([\d,]+) out", line)
+        if m:
+            tokens_in, tokens_out = int(m.group(1).replace(",", "")), int(m.group(2).replace(",", ""))
+    proc.wait()
+    if proc.returncode != 0:
+        log(f"graphify extract failed with exit {proc.returncode}")
+        return proc.returncode
     graph = corpus / "graphify-out" / "graph.json"
     if not graph.exists():
         log("graphify-out/graph.json missing after extract")
@@ -204,13 +214,8 @@ def main() -> int:
 
     # 6: manifest
     g = json.loads(graph.read_text())
-    cost = {}
-    cost_path = corpus / "graphify-out" / "cost.json"
-    if cost_path.exists():
-        try:
-            cost = json.loads(cost_path.read_text())
-        except json.JSONDecodeError:
-            pass
+    edges = g.get("links", g.get("edges", []))
+    communities = len({n.get("community") for n in g.get("nodes", []) if n.get("community") is not None})
     aliases = sorted({a.strip().lower() for a in args.aliases.split(",") if a.strip()} | {args.slug} | set(manifest.get("aliases", [])))
     manifest.update({
         "slug": args.slug,
@@ -223,9 +228,10 @@ def main() -> int:
         "fetched_at": scrape_info.get("fetched_at"),
         "page_count": scrape_info.get("pages"),
         "capped": scrape_info.get("capped", False),
-        "graph": {"nodes": len(g.get("nodes", [])), "edges": len(g.get("edges", []))},
-        "extraction": {"backend": "claude-cli", "model": args.model,
-                       "input_tokens": g.get("input_tokens"), "output_tokens": g.get("output_tokens"), "cost_json": cost or None},
+        "graph": {"nodes": len(g.get("nodes", [])), "edges": len(edges), "communities": communities},
+        "extraction": {"backend": "claude-cli", "model": args.model, "parallel": args.parallel,
+                       "input_tokens": tokens_in, "output_tokens": tokens_out,
+                       "note": "tokens are for this run only; cached pages cost nothing on re-ingest"},
         "wiki": (corpus / "graphify-out" / "wiki" / "index.md").exists(),
     })
     if args.repo:
