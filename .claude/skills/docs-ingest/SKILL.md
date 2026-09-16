@@ -66,9 +66,12 @@ uv run scripts/ingest.py --slug <slug> --url <url> --name "<name>" --aliases <a,
 ```
 
 Extraction shells out to `claude -p` and bills the user's Claude subscription.
-Defaults: model `sonnet`, serial chunks. Roughly 2 minutes per chunk of 20 to
-25 pages. For a 400-page site that is 30 to 40 minutes serial. `--parallel 4`
-speeds it up; `--model haiku` makes it cheaper at some quality cost. Tell the
+Defaults: model `sonnet`, serial chunks. Measured on 2026-09-16: sonnet took
+about 8 minutes per chunk of roughly 32 pages, so 400 pages is about 100
+minutes serial and ~13 chunks. haiku was about 2.5 minutes per chunk.
+`--parallel 4` cuts wall-clock roughly 4x but is opt-in in Graphify because
+concurrent `claude -p` calls can hit rate limits; try it for large sites.
+`--model haiku` is cheaper and faster at some extraction quality cost. Tell the
 user the estimate before running. Run it in the background and poll; do not
 block the session on it.
 
