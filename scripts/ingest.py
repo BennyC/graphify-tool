@@ -15,7 +15,7 @@ Steps:
     3. extract   graphify extract raw --backend claude-cli --out .   (cwd = corpus dir)
     4. label     graphify label . --backend claude-cli --missing-only
     5. wiki      graphify export wiki
-    6. manifest  corpora/<slug>/manifest.json (pages.json sits beside it)
+    6. manifest  corpora/<slug>/manifest.json (pages.json and scrape.json sit beside it)
 
 --repo <git-url> --docs-path <dir> replaces step 2 with a shallow clone: markdown
 files under <dir> are copied into raw/ and given source_url values derived from
@@ -108,8 +108,19 @@ def scrape_repo(args, out: Path) -> dict:
             dest.write_text(f"---\nsource_url: {url}\ntitle: {json.dumps(title)}\nfetched_at: {fetched_at}\n---\n\n{text}", encoding="utf-8")
             pages.append({"file": rel.as_posix(), "url": url, "title": title, "chars": len(text)})
         (out.parent / "pages.json").write_text(json.dumps(pages, indent=2), encoding="utf-8")
-        return {"strategy": "repo", "pages": len(pages), "capped": len(pages) >= args.max_pages,
-                "source_ref": ref, "fetched_at": fetched_at, "skipped": 0, "errors": 0}
+        summary = {"strategy": "repo", "pages": len(pages), "capped": len(pages) >= args.max_pages,
+                   "source_ref": ref, "fetched_at": fetched_at, "skipped": 0, "errors": 0}
+        (out.parent / "scrape.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        return summary
+
+
+def frontmatter_fetched_at(raw: Path) -> str | None:
+    """Recover fetched_at from any raw page when scrape.json is absent (pre-scrape.json corpora)."""
+    for p in sorted(raw.rglob("*.md")):
+        m = re.search(r"^fetched_at:\s*(\S+)$", p.read_text(encoding="utf-8", errors="replace")[:600], re.M)
+        if m:
+            return m.group(1)
+    return None
 
 
 def main() -> int:
@@ -153,9 +164,14 @@ def main() -> int:
             log("--skip-scrape given but corpora/<slug>/pages.json is missing")
             return 2
         pages = json.loads((corpus / "pages.json").read_text())
-        scrape_info = {"strategy": manifest.get("strategy", "unknown"), "pages": len(pages), "capped": False,
-                       "fetched_at": manifest.get("fetched_at")}
-        log(f"reusing raw/: {len(pages)} pages")
+        summary_path = corpus / "scrape.json"
+        if summary_path.exists():
+            scrape_info = json.loads(summary_path.read_text())
+        else:
+            scrape_info = {"strategy": manifest.get("strategy", "unknown"), "capped": manifest.get("capped", False),
+                           "fetched_at": manifest.get("fetched_at") or frontmatter_fetched_at(raw)}
+        scrape_info["pages"] = len(pages)
+        log(f"reusing raw/: {len(pages)} pages ({scrape_info.get('strategy')}, fetched {scrape_info.get('fetched_at')})")
     elif args.repo:
         scrape_info = scrape_repo(args, raw)
         log(f"copied {scrape_info['pages']} markdown files from {args.repo}")

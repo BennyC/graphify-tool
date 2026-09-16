@@ -25,6 +25,7 @@ corpora/<slug>/
   manifest.json                       identity, source, dates, counts, cost
   raw/                                one markdown file per page, source_url frontmatter
   pages.json                          file -> url map
+  scrape.json                         scrape summary (strategy, fetched_at, capped)
   graphify-out/                       Graphify output, cache kept across re-ingests
 ```
 

@@ -30,6 +30,7 @@ corpus.
 corpora/<slug>/manifest.json   identity, source, dates, counts, cost
 corpora/<slug>/raw/            one markdown file per page, source_url frontmatter
 corpora/<slug>/pages.json      file -> url map
+corpora/<slug>/scrape.json     scrape summary (strategy, fetched_at, cap)
 corpora/<slug>/graphify-out/   graph.json, GRAPH_REPORT.md, wiki/, cache/
 scripts/scrape.py              site -> markdown (llms.txt, sitemap, or crawl; native .md if served)
 scripts/ingest.py              scrape + graphify extract + label + wiki + manifest

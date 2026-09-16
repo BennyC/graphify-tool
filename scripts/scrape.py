@@ -24,7 +24,7 @@ Content: if the site serves native markdown at <url>.md it is used as-is.
 Otherwise HTML goes through trafilatura, with markdownify as a fallback.
 
 Every page gets frontmatter (source_url, title, fetched_at) and the run
-writes pages.json next to <out> plus a JSON summary on stdout. Progress goes to stderr.
+writes pages.json and scrape.json (the summary) next to <out>, and prints the summary on stdout. Progress goes to stderr.
 """
 from __future__ import annotations
 
@@ -396,6 +396,7 @@ def main() -> int:
     }
     if errors:
         (out.parent / "errors.json").write_text(json.dumps(errors, indent=2), encoding="utf-8")
+    (out.parent / "scrape.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     log(f"done: {len(pages)} pages, {skipped} skipped, {len(errors)} errors{', CAPPED' if capped else ''}")
     print(json.dumps(summary, indent=2))
     return 0
